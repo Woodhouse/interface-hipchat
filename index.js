@@ -1,4 +1,6 @@
 var xmpp = require("node-xmpp");
+var EventEmitter = require('events').EventEmitter;
+var eventEmitter = new EventEmitter();
 var client = new xmpp.Client({
     jid: '',
     password: '',
@@ -22,6 +24,10 @@ module.exports = function(api){
             .c('status')
             .t('Online')
         );
+        self.getProfile(function(profile){
+            this.name = profile.fn;
+            this.nickname = profile.nickname;
+        });
         api.addMessageSender('hipchat', function(message, to){
             self.sendMessage(to, message);
         });
@@ -30,6 +36,36 @@ module.exports = function(api){
     client.on('stanza', function(stanza) {
         self.recieveStanza(stanza);
     })
+
+    this.iqCount = 1
+
+    this.getProfile = function(callback){
+        var message = new xmpp.Element("iq", {
+                type: "get"
+            }).c("vCard", {
+                xmlns: "vcard-temp"
+            });
+
+        this.sendIq(message, function(err, data){
+            var profile = {};
+
+            if (!err) {
+                var vCardData = data.getChild('vCard').children;
+                for (var i = 0, len = vCardData.length; i < len; i++) {
+                    profile[vCardData[i].name.toLowerCase()] = vCardData[i].getText();
+                }
+            }
+            callback(profile);
+        });
+    }
+
+    this.sendIq = function(message, callback){
+        var id = this.iqCount++;
+        message = message.root();
+        message.attrs.id = id;
+        eventEmitter.once("iq:" + id, callback);
+        client.send(message);
+    }
 
     this.joinRoom = function(room){
         var packet, x;
@@ -42,7 +78,7 @@ module.exports = function(api){
         x.c("history", {
           maxstanzas: String(0)
         });
-        return client.send(packet);
+        client.send(packet);
     }
 
     this.sendMessage = function(to, message) {
@@ -82,10 +118,17 @@ module.exports = function(api){
                 this.joinRoom(inviteRoom);
             } else if(stanza.getChildText('body')) {
                 var message = stanza.getChildText('body');
-                if (message.substring(0, 1) == '@') {
+                var regex = new RegExp('^[@]{0,1}' + this.nickname)
+                message.replace(regex, api.name);
+                if (message.substring(0, 1) === '@') {
                   message = message.substring(1);
                 }
                 api.messageRecieved(stanza.attrs.from, 'hipchat', message);
+            }
+        } else if (stanza.is('iq')){
+            var eventId = "iq:" + stanza.attrs.id;
+            if (stanza.attrs.type === 'result') {
+                eventEmitter.emit(eventId, null, stanza);
             }
         }
 
