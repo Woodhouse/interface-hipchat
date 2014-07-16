@@ -119,6 +119,12 @@ module.exports = function(api){
             } else if(stanza.getChildText('body')) {
                 var message = stanza.getChildText('body');
                 var regex = new RegExp('^[@]{0,1}' + this.nickname)
+                var fromJid = new xmpp.JID(stanza.attrs.from);
+                var fromChannel = fromJid.bare().toString();
+                var fromName = fromJid.resource;
+                if (fromName === this.name) {
+                    return;
+                }
                 message.replace(regex, api.name);
                 if (message.substring(0, 1) === '@') {
                   message = message.substring(1);
