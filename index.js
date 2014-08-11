@@ -1,43 +1,61 @@
-var xmpp = require("node-xmpp");
-var EventEmitter = require('events').EventEmitter;
-var eventEmitter = new EventEmitter();
-var client = new xmpp.Client({
-    jid: '',
-    password: '',
-    host: 'chat.hipchat.com'
-})
-
-module.exports = function(api){
+module.exports = function(){
+    var xmpp = require("node-xmpp");
+    var EventEmitter = require('events').EventEmitter;
+    var eventEmitter = new EventEmitter();
     var self = this;
 
-    client.connection.socket.setTimeout(0)
-    client.connection.socket.setKeepAlive(true, 10000)
+    this.name = 'hipchat';
 
-    this.keepalive = setInterval(function() {
-        client.send(new xmpp.Element('r'));
-      }, 10000);
-    client.on('online', function() {
-        client.send(new xmpp.Element('presence', {})
-            .c('show')
-            .t('chat')
-            .up()
-            .c('status')
-            .t('Online')
-        );
-        self.getProfile(function(profile){
-            this.name = profile.fn;
-            this.nickname = profile.nickname;
+    this.defaultPrefs = [{
+        name: 'jid',
+        type: 'text',
+        value: ''
+    },{
+        name: 'password',
+        type: 'password',
+        value: ''
+    },{
+        name: 'host',
+        type: 'text',
+        value: ''
+    }];
+
+    this.init = function() {
+        this.client = new xmpp.Client({
+            jid: '134024_975744@chat.hipchat.com',
+            password: 'moolet',
+            host: 'chat.hipchat.com'
+        })
+
+        this.client.connection.socket.setTimeout(0)
+        this.client.connection.socket.setKeepAlive(true, 10000)
+
+        this.keepalive = setInterval(function() {
+            self.client.send(new xmpp.Element('r'));
+          }, 10000);
+        this.client.on('online', function() {
+            self.client.send(new xmpp.Element('presence', {})
+                .c('show')
+                .t('chat')
+                .up()
+                .c('status')
+                .t('Online')
+            );
+            self.getProfile(function(profile){
+                this.name = profile.fn;
+                this.nickname = profile.nickname;
+            });
+            this.api.addMessageSender('hipchat', function(message, to){
+                self.sendMessage(to, message);
+            });
         });
-        api.addMessageSender('hipchat', function(message, to){
-            self.sendMessage(to, message);
-        });
-    });
 
-    client.on('stanza', function(stanza) {
-        self.recieveStanza(stanza);
-    })
+        this.client.on('stanza', function(stanza) {
+            self.recieveStanza(stanza);
+        })
 
-    this.iqCount = 1
+        this.iqCount = 1
+    }
 
     this.getProfile = function(callback){
         var message = new xmpp.Element("iq", {
@@ -64,7 +82,7 @@ module.exports = function(api){
         message = message.root();
         message.attrs.id = id;
         eventEmitter.once("iq:" + id, callback);
-        client.send(message);
+        this.client.send(message);
     }
 
     this.joinRoom = function(room){
@@ -78,7 +96,7 @@ module.exports = function(api){
         x.c("history", {
           maxstanzas: String(0)
         });
-        client.send(packet);
+        this.client.send(packet);
     }
 
     this.sendMessage = function(to, message) {
@@ -100,7 +118,7 @@ module.exports = function(api){
         }
         packet.c("body").t(message);
 
-        client.send(packet);
+        this.client.send(packet);
     }
 
     this.recieveStanza = function(stanza){
@@ -125,11 +143,11 @@ module.exports = function(api){
                 if (fromName === this.name) {
                     return;
                 }
-                message.replace(regex, api.name);
+                message.replace(regex, this.api.name);
                 if (message.substring(0, 1) === '@') {
                   message = message.substring(1);
                 }
-                api.messageRecieved(stanza.attrs.from, 'hipchat', message);
+                this.api.messageRecieved(stanza.attrs.from, 'hipchat', message);
             }
         } else if (stanza.is('iq')){
             var eventId = "iq:" + stanza.attrs.id;
@@ -142,7 +160,9 @@ module.exports = function(api){
             stanza.attrs.to = stanza.attrs.from;
             delete stanza.attrs.from;
 
-            client.send(stanza);
+            this.client.send(stanza);
         }
     }
+
+    return this;
 }
