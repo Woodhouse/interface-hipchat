@@ -21,40 +21,42 @@ module.exports = function(){
     }];
 
     this.init = function() {
-        this.client = new xmpp.Client({
-            jid: '134024_975744@chat.hipchat.com',
-            password: 'moolet',
-            host: 'chat.hipchat.com'
-        })
-
-        this.client.connection.socket.setTimeout(0)
-        this.client.connection.socket.setKeepAlive(true, 10000)
-
-        this.keepalive = setInterval(function() {
-            self.client.send(new xmpp.Element('r'));
-          }, 10000);
-        this.client.on('online', function() {
-            self.client.send(new xmpp.Element('presence', {})
-                .c('show')
-                .t('chat')
-                .up()
-                .c('status')
-                .t('Online')
-            );
-            self.getProfile(function(profile){
-                this.name = profile.fn;
-                this.nickname = profile.nickname;
+        this.getPrefs().done(function(prefs){
+            self.client = new xmpp.Client({
+                jid: prefs.jid,
+                password: prefs.password,
+                host: prefs.host
             });
-            this.api.addMessageSender('hipchat', function(message, to){
-                self.sendMessage(to, message);
+
+            self.client.connection.socket.setTimeout(0)
+            self.client.connection.socket.setKeepAlive(true, 10000)
+
+            self.keepalive = setInterval(function() {
+                self.client.send(new xmpp.Element('r'));
+              }, 10000);
+            self.client.on('online', function() {
+                self.client.send(new xmpp.Element('presence', {})
+                    .c('show')
+                    .t('chat')
+                    .up()
+                    .c('status')
+                    .t('Online')
+                );
+                self.getProfile(function(profile){
+                    self.name = profile.fn;
+                    self.nickname = profile.nickname;
+                });
+                self.api.addMessageSender('hipchat', function(message, to){
+                    self.sendMessage(to, message);
+                });
             });
+
+            self.client.on('stanza', function(stanza) {
+                self.recieveStanza(stanza);
+            })
+
+            self.iqCount = 1
         });
-
-        this.client.on('stanza', function(stanza) {
-            self.recieveStanza(stanza);
-        })
-
-        this.iqCount = 1
     }
 
     this.getProfile = function(callback){
