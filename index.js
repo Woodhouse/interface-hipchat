@@ -5,6 +5,8 @@ module.exports = function(){
     var self = this;
 
     this.name = 'hipchat';
+    this.displayname = 'Hipchat';
+    this.description = 'Send messages to woodhouse via Hipchat';
 
     this.defaultPrefs = [{
         name: 'jid',
