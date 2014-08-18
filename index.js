@@ -23,12 +23,18 @@ module.exports = function(){
     }];
 
     this.init = function() {
+        var self = this;
         this.getPrefs().done(function(prefs){
             self.client = new xmpp.Client({
                 jid: prefs.jid,
                 password: prefs.password,
                 host: prefs.host
             });
+
+            self.client.on('error', function(error){
+                console.log('ERROR:');
+                console.dir(error);
+            })
 
             self.client.connection.socket.setTimeout(0)
             self.client.connection.socket.setKeepAlive(true, 10000)
@@ -45,11 +51,11 @@ module.exports = function(){
                     .t('Online')
                 );
                 self.getProfile(function(profile){
-                    self.name = profile.fn;
+                    self.botname = profile.fn;
                     self.nickname = profile.nickname;
                 });
-                self.api.addMessageSender('hipchat', function(message, to){
-                    self.sendMessage(to, message);
+                self.addMessageSender(function(message, to){
+                    self.sendStanza(to, message);
                 });
             });
 
@@ -103,7 +109,7 @@ module.exports = function(){
         this.client.send(packet);
     }
 
-    this.sendMessage = function(to, message) {
+    this.sendStanza = function(to, message) {
         var packet, parsedJid;
         parsedJid = new xmpp.JID(to);
         if (parsedJid.domain === 'conf.hipchat.com') {
@@ -144,14 +150,14 @@ module.exports = function(){
                 var fromJid = new xmpp.JID(stanza.attrs.from);
                 var fromChannel = fromJid.bare().toString();
                 var fromName = fromJid.resource;
-                if (fromName === this.name) {
+                if (fromName === this.botname) {
                     return;
                 }
                 message.replace(regex, this.api.name);
                 if (message.substring(0, 1) === '@') {
                   message = message.substring(1);
                 }
-                this.api.messageRecieved(stanza.attrs.from, 'hipchat', message);
+                this.messageRecieved(stanza.attrs.from, message);
             }
         } else if (stanza.is('iq')){
             var eventId = "iq:" + stanza.attrs.id;
@@ -165,6 +171,12 @@ module.exports = function(){
             delete stanza.attrs.from;
 
             this.client.send(stanza);
+        }
+    }
+
+    this.exit = function(){
+        if (this.client) {
+            this.client.end();
         }
     }
 
