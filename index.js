@@ -24,6 +24,8 @@ module.exports = function(){
 
     this.init = function() {
         var self = this;
+        this.users = {};
+
         this.getPrefs().done(function(prefs){
             self.client = new xmpp.Client({
                 jid: prefs.jid,
@@ -54,6 +56,7 @@ module.exports = function(){
                     self.botname = profile.fn;
                     self.nickname = profile.nickname;
                 });
+
                 self.addMessageSender(function(message, to){
                     self.sendStanza(to, message);
                 });
@@ -87,6 +90,8 @@ module.exports = function(){
         });
     }
 
+
+
     this.sendIq = function(message, callback){
         var id = this.iqCount++;
         message = message.root();
@@ -114,7 +119,7 @@ module.exports = function(){
         parsedJid = new xmpp.JID(to);
         if (parsedJid.domain === 'conf.hipchat.com') {
           packet = new xmpp.Element("message", {
-            to: "" + to + "/" + "Woodhouse Bot",
+            to: "" + to,
             type: "groupchat"
           });
         } else {
@@ -150,6 +155,7 @@ module.exports = function(){
                 var fromJid = new xmpp.JID(stanza.attrs.from);
                 var fromChannel = fromJid.bare().toString();
                 var fromName = fromJid.resource;
+                var user;
                 if (fromName === this.botname) {
                     return;
                 }
@@ -157,12 +163,40 @@ module.exports = function(){
                 if (message.substring(0, 1) === '@') {
                   message = message.substring(1);
                 }
-                this.messageRecieved(stanza.attrs.from, message);
+
+                if (stanza.attrs.type === 'groupchat') {
+                    var matches = stanza.attrs.from.match(/^(.+?)@(.+?)\/(.+?)$/);
+                    var room = matches[1];
+                    var nickName = matches[3];
+                    user = this.users[room][nickName];
+                } else {
+                    user = stanza.attrs.from.split('/')[0];
+                }
+                this.messageRecieved(stanza.attrs.from, message, user);
             }
         } else if (stanza.is('iq')){
             var eventId = "iq:" + stanza.attrs.id;
             if (stanza.attrs.type === 'result') {
                 eventEmitter.emit(eventId, null, stanza);
+            }
+        }
+
+        if (stanza.is('presence')) {
+            var x = stanza.getChild("x", "http://jabber.org/protocol/muc#user")
+            if (x) {
+                var matches = stanza.attrs.from.match(/^(.+?)@(.+?)\/(.+?)$/);
+                var room = matches[1];
+                var nickName = matches[3];
+
+                if (!this.users[room]) {
+                    this.users[room] = {};
+                }
+
+                if (!stanza.attrs.type) {
+                    this.users[room][nickName] = x.getChild("item").attrs.jid;
+                } else {
+                    delete this.users[room][nickName];
+                }
             }
         }
 
