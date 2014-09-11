@@ -57,6 +57,10 @@ module.exports = function(){
                     self.nickname = profile.nickname;
                 });
 
+                self.getRoster(function(users){
+                    self.users['all'] = users;
+                });
+
                 self.addMessageSender(function(message, to){
                     self.sendStanza(to, message);
                 });
@@ -90,7 +94,31 @@ module.exports = function(){
         });
     }
 
+    this.getRoster = function(callback){
+        var message = new xmpp.Element("iq", {
+                type: "get"
+            }).c("query", {
+                xmlns: "jabber:iq:roster"
+            });
 
+        this.sendIq(message, function(err, stanza){
+            var profile = {};
+
+            if (!err) {
+                var users = stanza.getChild("query").getChildren("item");
+                var returndata = {};
+
+                for (var i = 0, len = users.length; i < len; i++) {
+                    returndata[users[i].attrs.mention_name] = {
+                        jid: users[i].attrs.jid,
+                        name: users[i].attrs.name,
+                        mention_name: users[i].attrs.mention_name
+                    };
+                }
+                callback(returndata);
+            }
+        });
+    }
 
     this.sendIq = function(message, callback){
         var id = this.iqCount++;
@@ -159,9 +187,17 @@ module.exports = function(){
                 if (fromName === this.botname) {
                     return;
                 }
-                message.replace(regex, this.api.name);
+
+                message = message.replace(regex, this.api.name);
                 if (message.substring(0, 1) === '@') {
                   message = message.substring(1);
+                }
+                var mentions = message.match(/@([0-9a-z]+)/gi);
+
+                if (mentions) {
+                    for (var i = 0, len = mentions.length; i < len; i++) {
+                        message = message.replace(mentions[i], this.users['all'][mentions[i].substring(1)].jid);
+                    }
                 }
 
                 if (stanza.attrs.type === 'groupchat') {
@@ -178,6 +214,20 @@ module.exports = function(){
             var eventId = "iq:" + stanza.attrs.id;
             if (stanza.attrs.type === 'result') {
                 eventEmitter.emit(eventId, null, stanza);
+            } else if (stanza.attrs.type === "set") {
+                if (stanza.getChild("query").attrs.xmlns === "jabber:iq:roster") {
+                    var users = stanza.getChild("query").getChildren("item");
+                    var returndata = {};
+
+                    for (var i = 0, len = users.length; i < len; i++) {
+                        returndata[users[i].attrs.mention_name] = {
+                            jid: users[i].attrs.jid,
+                            name: users[i].attrs.name,
+                            mention_name: users[i].attrs.mention_name
+                        };
+                    }
+                    this.users['all'] = users;
+                }
             }
         }
 
