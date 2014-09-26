@@ -196,7 +196,9 @@ module.exports = function(){
 
                 if (mentions) {
                     for (var i = 0, len = mentions.length; i < len; i++) {
-                        message = message.replace(mentions[i], this.users['all'][mentions[i].substring(1)].jid);
+                        if(typeof this.users['all'][mentions[i].substring(1)] !== 'undefined'){
+                            message = message.replace(mentions[i], this.users['all'][mentions[i].substring(1)].jid);
+                        }
                     }
                 }
 
