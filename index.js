@@ -131,7 +131,7 @@ module.exports = function(){
     this.joinRoom = function(room){
         var packet, x;
         packet = new xmpp.Element("presence", {
-          to: "" + room + "/" + "Woodhouse Bot"
+          to: "" + room + "/" + this.botname;
         });
         x = packet.c("x", {
           xmlns: "http://jabber.org/protocol/muc"
